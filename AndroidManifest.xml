@@ -330,6 +330,12 @@
             android:enabled="false"
             >
         </service>
+		
+        <service
+            android:name=".service.AccountCreationService"
+            android:enabled="true"
+            >
+        </service>
 
         <service
             android:name=".Controller$ControllerService"
