@@ -49,13 +49,6 @@ public class AccountCreationService extends IntentService {
 																	// used
 	public static final String OPTIONS_DOMAIN = "domain";// TODO: not used
 
-	/**
-	 * Package calling this service. Use if you want to receive back a result
-	 */
-	public static final String OPTIONS_CALLING_PACKAGE = "callingPackage";
-
-	public static final String ACCOUNT_RECEIVER = "com.android.email.ACCOUNT_RECEIVER";
-
 	/*
 	 * Account creation results
 	 */
@@ -75,10 +68,6 @@ public class AccountCreationService extends IntentService {
 			| HostAuth.FLAG_AUTHENTICATE | HostAuth.FLAG_TRUST_ALL;
 
 	private final EmailAddressValidator mEmailValidator = new EmailAddressValidator();
-
-	private String mCallingPackage;
-
-	private ResultReceiver mResultReceiver;
 
 	private void setHostAuthRecvFromBundle(Account account, Bundle options) {
 		HostAuth receiveHostAuth = account
@@ -125,8 +114,6 @@ public class AccountCreationService extends IntentService {
 	@Override
 	protected void onHandleIntent(Intent intent) {
 		Bundle options = intent.getExtras();
-
-		initializeResultReceiverIfItExists(intent, options);
 
 		String email = options.getString(OPTIONS_EMAIL);
 		String password = options.getString(OPTIONS_PASSWORD);
@@ -188,22 +175,6 @@ public class AccountCreationService extends IntentService {
 		sendResult(email, RESULT_CODE_FAILURE, RESULT_UNKNOWN);
 	}
 
-	private void initializeResultReceiverIfItExists(Intent intent,
-			Bundle options) {
-		mCallingPackage = options.getString(OPTIONS_CALLING_PACKAGE);
-		if (mCallingPackage != null) {
-			try {
-				Context callingContext = createPackageContext(mCallingPackage,
-						Context.CONTEXT_INCLUDE_CODE
-								| Context.CONTEXT_IGNORE_SECURITY);
-				options.setClassLoader(callingContext.getClassLoader());
-				mResultReceiver = intent.getParcelableExtra(ACCOUNT_RECEIVER);
-			} catch (NameNotFoundException e1) {
-				// can't do anything
-			}
-		}
-	}
-
 	private boolean addSystemAccount(String email, String password,
 			Bundle options) {
 		Bundle userdata = new Bundle();
@@ -246,12 +217,11 @@ public class AccountCreationService extends IntentService {
 	}
 
 	private void sendResult(String email, int resultCode, String resultMessage) {
-		if (mResultReceiver != null) {
-			Bundle resultData = new Bundle();
-			resultData.putString("message", resultMessage);
-			resultData.putString("email", email);
-			mResultReceiver.send(resultCode, resultData);
-		}
+		Intent result = new Intent("com.android.email.Accounts.CREATE_ACCOUNT_RESULT");
+		result.putExtra("message", resultMessage);
+		result.putExtra("email", email);	
+		result.putExtra("resultCode", resultCode);
+		sendBroadcast(result);//TODO: add permission
 	}
 
 	private static boolean hasReceiveAuthOptions(Bundle options) {
