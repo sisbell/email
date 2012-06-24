@@ -1,6 +1,8 @@
 package com.android.email.service;
 
+import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.concurrent.TimeUnit;
 
 import com.android.email.EmailAddressValidator;
 import com.android.email.activity.setup.AccountSettingsUtils;
@@ -8,6 +10,10 @@ import com.android.email.activity.setup.AccountSettingsUtils.Provider;
 import com.android.emailcommon.provider.Account;
 import com.android.emailcommon.provider.HostAuth;
 
+import android.accounts.AccountManager;
+import android.accounts.AccountManagerFuture;
+import android.accounts.AuthenticatorException;
+import android.accounts.OperationCanceledException;
 import android.app.IntentService;
 import android.content.Context;
 import android.content.Intent;
@@ -36,15 +42,9 @@ public class AccountCreationService extends IntentService {
 	public static final String OPTIONS_OUT_SECURITY = "outSecurity";// TODO: not
 																	// used
 
-	public static final String OPTIONS_SYNC_EMAIL = "syncEmail";// TODO: not
-																// used
-	public static final String OPTIONS_SYNC_CALENDAR = "syncCalendar";// TODO:
-																		// not
-																		// used
-	public static final String OPTIONS_SYNC_CONTACTS = "syncContacts";// TODO:
-																		// not
-																		// used
-
+	public static final String OPTIONS_EMAIL_SYNC_ENABLED = "syncEmail";
+	public static final String OPTIONS_CALENDAR_SYNC_ENABLED = "syncCalendar";
+	public static final String OPTIONS_CONTACTS_SYNC_ENABLED = "syncContacts";
 	public static final String OPTIONS_SERVICE_TYPE = "serviceType";// TODO: not
 																	// used
 	public static final String OPTIONS_DOMAIN = "domain";// TODO: not used
@@ -65,6 +65,8 @@ public class AccountCreationService extends IntentService {
 
 	public static final String RESULT_INVALID_HOST = "RESULT_INVALID_HOST";
 
+	public static final String RESULT_UNKNOWN = "RESULT_UNKNOWN";
+
 	public static int RESULT_CODE_SUCCESS = 0x0;
 
 	public static int RESULT_CODE_FAILURE = 0x1;
@@ -81,9 +83,9 @@ public class AccountCreationService extends IntentService {
 	private static Bundle createTestBundle() {
 		Bundle b = new Bundle();
 		b.putString(OPTIONS_VERSION, "1.0");
-		b.putString(OPTIONS_DISPLAY_NAME, "Sample Name 3");
-		b.putString(OPTIONS_PASSWORD, "password");
-		b.putString(OPTIONS_EMAIL, "email@example.com");
+		b.putString(OPTIONS_DISPLAY_NAME, "Sample Name 4");
+		b.putString(OPTIONS_PASSWORD, "");
+		b.putString(OPTIONS_EMAIL, "");
 
 		return b;
 	}
@@ -137,18 +139,10 @@ public class AccountCreationService extends IntentService {
 			options = createTestBundle();
 		}
 
-		mCallingPackage = options.getString(OPTIONS_CALLING_PACKAGE);
-		try {
-			Context callingContext = createPackageContext(mCallingPackage,
-					Context.CONTEXT_INCLUDE_CODE
-							| Context.CONTEXT_IGNORE_SECURITY);
-			options.setClassLoader(callingContext.getClassLoader());
-			mResultReceiver = intent.getParcelableExtra(ACCOUNT_RECEIVER);
-		} catch (NameNotFoundException e1) {
-			// can't do anything
-		}
+		initializeResultReceiverIfItExists(intent, options);
 
 		String email = options.getString(OPTIONS_EMAIL);
+		String password = options.getString(OPTIONS_PASSWORD);
 
 		if (!isVersionProtocolSupported(options)) {
 			sendResult(email, RESULT_CODE_FAILURE, RESULT_INVALID_VERSION);
@@ -177,8 +171,7 @@ public class AccountCreationService extends IntentService {
 			} else if (provider != null) {
 				HostAuth recvAuth = account.getOrCreateHostAuthRecv(this);
 				HostAuth.setHostAuthFromString(recvAuth, provider.incomingUri);
-				recvAuth.setLogin(provider.incomingUsername,
-						options.getString(OPTIONS_PASSWORD));
+				recvAuth.setLogin(provider.incomingUsername, password);
 			} else {
 				sendResult(email, RESULT_CODE_FAILURE, RESULT_INVALID_HOST);
 				return;
@@ -189,8 +182,7 @@ public class AccountCreationService extends IntentService {
 			} else if (provider != null) {
 				HostAuth sendAuth = account.getOrCreateHostAuthSend(this);
 				HostAuth.setHostAuthFromString(sendAuth, provider.outgoingUri);
-				sendAuth.setLogin(provider.outgoingUsername,
-						options.getString(OPTIONS_PASSWORD));
+				sendAuth.setLogin(provider.outgoingUsername, password);
 			} else {
 				sendResult(email, RESULT_CODE_FAILURE, RESULT_INVALID_HOST);
 				return;
@@ -200,8 +192,70 @@ public class AccountCreationService extends IntentService {
 			return;
 		}
 
-		account.save(getApplicationContext());
-		sendResult(email, RESULT_CODE_SUCCESS, "OK");
+		if (account.save(this) != null) {
+			if (addSystemAccount(email, password, options)) {
+				sendResult(email, RESULT_CODE_SUCCESS, "OK");
+				return;
+			}
+		}
+		sendResult(email, RESULT_CODE_FAILURE, RESULT_UNKNOWN);
+	}
+
+	private void initializeResultReceiverIfItExists(Intent intent,
+			Bundle options) {
+		mCallingPackage = options.getString(OPTIONS_CALLING_PACKAGE);
+		if (mCallingPackage != null) {
+			try {
+				Context callingContext = createPackageContext(mCallingPackage,
+						Context.CONTEXT_INCLUDE_CODE
+								| Context.CONTEXT_IGNORE_SECURITY);
+				options.setClassLoader(callingContext.getClassLoader());
+				mResultReceiver = intent.getParcelableExtra(ACCOUNT_RECEIVER);
+			} catch (NameNotFoundException e1) {
+				// can't do anything
+			}
+		}
+	}
+
+	private boolean addSystemAccount(String email, String password,
+			Bundle options) {
+		Bundle userdata = new Bundle();
+		userdata.putString(PopImapAuthenticatorService.OPTIONS_USERNAME, email);
+		userdata.putString(PopImapAuthenticatorService.OPTIONS_PASSWORD,
+				password);
+		userdata.putBoolean(
+				PopImapAuthenticatorService.OPTIONS_EMAIL_SYNC_ENABLED,
+				options.getBoolean(OPTIONS_EMAIL_SYNC_ENABLED, true));
+		userdata.putBoolean(
+				PopImapAuthenticatorService.OPTIONS_CONTACTS_SYNC_ENABLED,
+				options.getBoolean(OPTIONS_CONTACTS_SYNC_ENABLED));
+		userdata.putBoolean(
+				PopImapAuthenticatorService.OPTIONS_CALENDAR_SYNC_ENABLED,
+				options.getBoolean(OPTIONS_CALENDAR_SYNC_ENABLED));
+
+
+		AccountManager accountManager = AccountManager.get(this);
+		AccountManagerFuture<Bundle> future = accountManager.addAccount(
+				"com.android.email", null, null, userdata, null, null, null);
+
+		Bundle resultBundle = null;
+		try {
+			resultBundle = future.getResult(5, TimeUnit.SECONDS);
+		} catch (OperationCanceledException e) {
+			return false;
+		} catch (AuthenticatorException e) {
+			return false;
+		} catch (IOException e) {
+			return false;
+		}
+
+		return isAccountCreated(resultBundle);
+	}
+
+	private boolean isAccountCreated(Bundle resultBundle) {
+		return resultBundle != null
+				&& resultBundle.containsKey(AccountManager.KEY_ACCOUNT_NAME)
+				&& resultBundle.containsKey(AccountManager.KEY_ACCOUNT_TYPE);
 	}
 
 	private void sendResult(String email, int resultCode, String resultMessage) {
