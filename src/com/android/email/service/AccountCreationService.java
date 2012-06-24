@@ -15,6 +15,7 @@ package com.android.email.service;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import com.android.email.EmailAddressValidator;
 import com.android.emailcommon.provider.Account;
 import com.android.emailcommon.provider.HostAuth;
 
@@ -50,6 +51,8 @@ public class AccountCreationService extends IntentService {
     
     private static final int HOST_AUTH_FLAGS = HostAuth.FLAG_SSL 
     		| HostAuth.FLAG_AUTHENTICATE | HostAuth.FLAG_TRUST_ALL;
+    
+    private final EmailAddressValidator mEmailValidator = new EmailAddressValidator();
     
 	private static Bundle createTestBundle() {
 		Bundle b = new Bundle();
@@ -119,6 +122,10 @@ public class AccountCreationService extends IntentService {
 		}
 		
 		if(!isVersionProtocolSupported(options)) {
+			return;//send error
+		}
+		
+		if(!mEmailValidator.isValid(options.getString(OPTIONS_EMAIL))) {
 			return;//send error
 		}
 		
