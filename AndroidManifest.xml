@@ -83,6 +83,15 @@
     <uses-permission
         android:name="com.android.email.permission.ACCESS_PROVIDER"/>
 
+    <!-- Grant permission to system apps to access account creation service (see provider below) -->
+    <permission
+        android:name="com.android.email.permission.USE_ACCOUNT_CREATION_SERVICE"
+        android:protectionLevel="signatureOrSystem"
+        android:label="@string/permission_access_provider_label"
+        android:description="@string/permission_access_provider_desc"/>
+    <uses-permission
+        android:name="com.android.email.permission.USE_ACCOUNT_CREATION_SERVICE"/>
+		
     <!-- Note:  Actually, android:hardwareAccelerated could be "true", but in order to switch it
          on/off in the debug screen, we have to set it "false" here and enable it at runtime.  -->
     <application
@@ -333,8 +342,7 @@
 		
         <service
             android:name=".service.AccountCreationService"
-			android:exported="true"
-            android:enabled="true"
+			android:permission="com.android.email.permission.USE_ACCOUNT_CREATION_SERVICE"
             >
             <intent-filter>
                 <action
