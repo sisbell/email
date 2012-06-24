@@ -80,16 +80,6 @@ public class AccountCreationService extends IntentService {
 
 	private ResultReceiver mResultReceiver;
 
-	private static Bundle createTestBundle() {
-		Bundle b = new Bundle();
-		b.putString(OPTIONS_VERSION, "1.0");
-		b.putString(OPTIONS_DISPLAY_NAME, "Sample Name 4");
-		b.putString(OPTIONS_PASSWORD, "");
-		b.putString(OPTIONS_EMAIL, "");
-
-		return b;
-	}
-
 	private void setHostAuthRecvFromBundle(Account account, Bundle options) {
 		HostAuth receiveHostAuth = account
 				.getOrCreateHostAuthRecv(getBaseContext());
@@ -135,9 +125,6 @@ public class AccountCreationService extends IntentService {
 	@Override
 	protected void onHandleIntent(Intent intent) {
 		Bundle options = intent.getExtras();
-		if (options == null) {
-			options = createTestBundle();
-		}
 
 		initializeResultReceiverIfItExists(intent, options);
 

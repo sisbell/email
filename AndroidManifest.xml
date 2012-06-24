@@ -338,7 +338,7 @@
             >
             <intent-filter>
                 <action
-                    android:name="com.android.email.CREATE_ACCOUNT" />
+                    android:name="com.android.email.CREATE_ACCOUNT_SERVICE" />
             </intent-filter>			
         </service>
 
