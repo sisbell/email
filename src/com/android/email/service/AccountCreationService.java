@@ -9,8 +9,11 @@ import com.android.emailcommon.provider.Account;
 import com.android.emailcommon.provider.HostAuth;
 
 import android.app.IntentService;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager.NameNotFoundException;
 import android.os.Bundle;
+import android.os.ResultReceiver;
 
 public class AccountCreationService extends IntentService {
 
@@ -45,11 +48,35 @@ public class AccountCreationService extends IntentService {
 	public static final String OPTIONS_SERVICE_TYPE = "serviceType";// TODO: not
 																	// used
 	public static final String OPTIONS_DOMAIN = "domain";// TODO: not used
+	
+	/**
+	 * Package calling this service. Use if you want to receive back a result
+	 */
+	public static final String OPTIONS_CALLING_PACKAGE = "callingPackage";
+
+	public static final String ACCOUNT_RECEIVER = "com.android.email.ACCOUNT_RECEIVER";
+	
+	/*
+	 * Account creation results
+	 */
+	public static final String RESULT_INVALID_VERSION = "RESULT_INVALID_VERSION";
+
+	public static final String RESULT_EMAIL_ADDRESS_MALFORMED = "EMAIL_ADDRESS_MALFORMED";
+
+	public static final String RESULT_INVALID_HOST = "RESULT_INVALID_HOST";
+
+	public static int RESULT_CODE_SUCCESS = 0x0;
+
+	public static int RESULT_CODE_FAILURE = 0x1;
 
 	private static final int HOST_AUTH_FLAGS = HostAuth.FLAG_SSL
 			| HostAuth.FLAG_AUTHENTICATE | HostAuth.FLAG_TRUST_ALL;
 
 	private final EmailAddressValidator mEmailValidator = new EmailAddressValidator();
+	
+	private String mCallingPackage;
+	
+	private ResultReceiver mResultReceiver;
 
 	private static Bundle createTestBundle() {
 		Bundle b = new Bundle();
@@ -110,63 +137,97 @@ public class AccountCreationService extends IntentService {
 			options = createTestBundle();
 		}
 
+		mCallingPackage = options.getString(OPTIONS_CALLING_PACKAGE);	
+		mResultReceiver = intent.getParcelableExtra(ACCOUNT_RECEIVER);
+		
+		String email = options.getString(OPTIONS_EMAIL);
+
 		if (!isVersionProtocolSupported(options)) {
-			return;// send error
+			sendResult(email, RESULT_CODE_FAILURE,
+					RESULT_INVALID_VERSION);
+			return;
 		}
 
-		String email = options.getString(OPTIONS_EMAIL);
 		if (!mEmailValidator.isValid(email)) {
-			return;// send error
+			sendResult(email, RESULT_CODE_FAILURE,
+					RESULT_EMAIL_ADDRESS_MALFORMED);
+			return;
 		}
-		
+
 		Account account = fromBundleToAccount(options);
-		
+
 		String[] emailParts = email.split("@");
 		String domain = emailParts[1].trim();
 		Provider provider = AccountSettingsUtils.findProviderForDomain(this,
 				domain);
-		if(provider != null) {
+		if (provider != null) {
 			provider.expandTemplates(email);
 		}
-		
+
 		try {
-			if(hasReceiveAuthOptions(options) ) {
+			if (hasReceiveAuthOptions(options)) {
 				setHostAuthRecvFromBundle(account, options);
-			} else if(provider != null) {
+			} else if (provider != null) {
 				HostAuth recvAuth = account.getOrCreateHostAuthRecv(this);
 				HostAuth.setHostAuthFromString(recvAuth, provider.incomingUri);
-				recvAuth.setLogin(provider.incomingUsername, options.getString(OPTIONS_PASSWORD));			
+				recvAuth.setLogin(provider.incomingUsername,
+						options.getString(OPTIONS_PASSWORD));
 			} else {
-				return;//TODO: error
+				sendResult(email, RESULT_CODE_FAILURE,
+						RESULT_INVALID_HOST);
+				return;
 			}
-			
-			if(hasSendAuthOptions(options) ) {
+
+			if (hasSendAuthOptions(options)) {
 				setHostAuthSendFromBundle(account, options);
-			} else if(provider != null) {
+			} else if (provider != null) {
 				HostAuth sendAuth = account.getOrCreateHostAuthSend(this);
 				HostAuth.setHostAuthFromString(sendAuth, provider.outgoingUri);
-				sendAuth.setLogin(provider.outgoingUsername, options.getString(OPTIONS_PASSWORD));	
+				sendAuth.setLogin(provider.outgoingUsername,
+						options.getString(OPTIONS_PASSWORD));
 			} else {
-				return;//TODO: error
+				sendResult(email, RESULT_CODE_FAILURE,
+						RESULT_INVALID_HOST);
+				return;
 			}
 		} catch (URISyntaxException e) {
-			e.printStackTrace();
-			return;//TODO error
+			sendResult(email, RESULT_CODE_FAILURE, RESULT_INVALID_HOST);
+			return;
 		}
-		
+
 		account.save(getApplicationContext());
+		sendResult(email, RESULT_CODE_SUCCESS, "OK");
 	}
-	
+
+	private void sendResult(String email,
+			int resultCode, String resultMessage){
+		if (mResultReceiver != null && mCallingPackage != null) {
+			Bundle resultData = new Bundle();
+			resultData.putString("message", resultMessage);
+			resultData.putString("email", email);
+			
+			try {
+				Context callingContext = createPackageContext(mCallingPackage, Context.CONTEXT_INCLUDE_CODE | Context.CONTEXT_IGNORE_SECURITY);
+				resultData.setClassLoader(callingContext.getClassLoader());
+				mResultReceiver.send(resultCode, resultData);
+			} catch (NameNotFoundException e) {
+				//can't do anything
+			}
+		}
+	}
+
 	private static boolean hasReceiveAuthOptions(Bundle options) {
-		return (options.containsKey(OPTIONS_IN_PORT) && options.containsKey(OPTIONS_IN_SERVER) 
-				&& options.containsKey(OPTIONS_IN_SECURITY) );
+		return (options.containsKey(OPTIONS_IN_PORT)
+				&& options.containsKey(OPTIONS_IN_SERVER) && options
+					.containsKey(OPTIONS_IN_SECURITY));
 	}
 
 	private static boolean hasSendAuthOptions(Bundle options) {
-		return (options.containsKey(OPTIONS_OUT_PORT) && options.containsKey(OPTIONS_OUT_SERVER) 
-				&& options.containsKey(OPTIONS_OUT_SECURITY) );
+		return (options.containsKey(OPTIONS_OUT_PORT)
+				&& options.containsKey(OPTIONS_OUT_SERVER) && options
+					.containsKey(OPTIONS_OUT_SECURITY));
 	}
-	
+
 	private static boolean isVersionProtocolSupported(Bundle options) {
 		String version = options.getString(OPTIONS_VERSION, "0");
 		return "1.0".equals(version);
