@@ -48,14 +48,14 @@ public class AccountCreationService extends IntentService {
 	public static final String OPTIONS_SERVICE_TYPE = "serviceType";// TODO: not
 																	// used
 	public static final String OPTIONS_DOMAIN = "domain";// TODO: not used
-	
+
 	/**
 	 * Package calling this service. Use if you want to receive back a result
 	 */
 	public static final String OPTIONS_CALLING_PACKAGE = "callingPackage";
 
 	public static final String ACCOUNT_RECEIVER = "com.android.email.ACCOUNT_RECEIVER";
-	
+
 	/*
 	 * Account creation results
 	 */
@@ -73,9 +73,9 @@ public class AccountCreationService extends IntentService {
 			| HostAuth.FLAG_AUTHENTICATE | HostAuth.FLAG_TRUST_ALL;
 
 	private final EmailAddressValidator mEmailValidator = new EmailAddressValidator();
-	
+
 	private String mCallingPackage;
-	
+
 	private ResultReceiver mResultReceiver;
 
 	private static Bundle createTestBundle() {
@@ -137,14 +137,21 @@ public class AccountCreationService extends IntentService {
 			options = createTestBundle();
 		}
 
-		mCallingPackage = options.getString(OPTIONS_CALLING_PACKAGE);	
-		mResultReceiver = intent.getParcelableExtra(ACCOUNT_RECEIVER);
-		
+		mCallingPackage = options.getString(OPTIONS_CALLING_PACKAGE);
+		try {
+			Context callingContext = createPackageContext(mCallingPackage,
+					Context.CONTEXT_INCLUDE_CODE
+							| Context.CONTEXT_IGNORE_SECURITY);
+			options.setClassLoader(callingContext.getClassLoader());
+			mResultReceiver = intent.getParcelableExtra(ACCOUNT_RECEIVER);
+		} catch (NameNotFoundException e1) {
+			// can't do anything
+		}
+
 		String email = options.getString(OPTIONS_EMAIL);
 
 		if (!isVersionProtocolSupported(options)) {
-			sendResult(email, RESULT_CODE_FAILURE,
-					RESULT_INVALID_VERSION);
+			sendResult(email, RESULT_CODE_FAILURE, RESULT_INVALID_VERSION);
 			return;
 		}
 
@@ -173,8 +180,7 @@ public class AccountCreationService extends IntentService {
 				recvAuth.setLogin(provider.incomingUsername,
 						options.getString(OPTIONS_PASSWORD));
 			} else {
-				sendResult(email, RESULT_CODE_FAILURE,
-						RESULT_INVALID_HOST);
+				sendResult(email, RESULT_CODE_FAILURE, RESULT_INVALID_HOST);
 				return;
 			}
 
@@ -186,8 +192,7 @@ public class AccountCreationService extends IntentService {
 				sendAuth.setLogin(provider.outgoingUsername,
 						options.getString(OPTIONS_PASSWORD));
 			} else {
-				sendResult(email, RESULT_CODE_FAILURE,
-						RESULT_INVALID_HOST);
+				sendResult(email, RESULT_CODE_FAILURE, RESULT_INVALID_HOST);
 				return;
 			}
 		} catch (URISyntaxException e) {
@@ -199,20 +204,12 @@ public class AccountCreationService extends IntentService {
 		sendResult(email, RESULT_CODE_SUCCESS, "OK");
 	}
 
-	private void sendResult(String email,
-			int resultCode, String resultMessage){
-		if (mResultReceiver != null && mCallingPackage != null) {
+	private void sendResult(String email, int resultCode, String resultMessage) {
+		if (mResultReceiver != null) {
 			Bundle resultData = new Bundle();
 			resultData.putString("message", resultMessage);
 			resultData.putString("email", email);
-			
-			try {
-				Context callingContext = createPackageContext(mCallingPackage, Context.CONTEXT_INCLUDE_CODE | Context.CONTEXT_IGNORE_SECURITY);
-				resultData.setClassLoader(callingContext.getClassLoader());
-				mResultReceiver.send(resultCode, resultData);
-			} catch (NameNotFoundException e) {
-				//can't do anything
-			}
+			mResultReceiver.send(resultCode, resultData);
 		}
 	}
 
