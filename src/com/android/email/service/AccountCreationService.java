@@ -182,16 +182,16 @@ public class AccountCreationService extends IntentService {
 		String password = options.getString(OPTIONS_PASSWORD);
 
 		if (!isVersionProtocolSupported(options)) {
-			sendResult(email, RESULT_CODE_FAILURE, RESULT_INVALID_VERSION);
+			sendResult(options, RESULT_CODE_FAILURE, 0, RESULT_INVALID_VERSION);
 			return;
 		}
 
 		if (!mEmailValidator.isValid(email)) {
-			sendResult(email, RESULT_CODE_FAILURE,
+			sendResult(options, 0, RESULT_CODE_FAILURE,
 					RESULT_EMAIL_ADDRESS_MALFORMED);
 			return;
 		}
-
+		
 		Account account = createDefaultAccountFrom(options);
 
 		String[] emailParts = email.split("@");
@@ -210,7 +210,7 @@ public class AccountCreationService extends IntentService {
 				HostAuth.setHostAuthFromString(recvAuth, provider.incomingUri);
 				recvAuth.setLogin(provider.incomingUsername, password);
 			} else {
-				sendResult(email, RESULT_CODE_FAILURE, RESULT_INVALID_HOST);
+				sendResult(options, RESULT_CODE_FAILURE, 0, RESULT_INVALID_HOST);
 				return;
 			}
 
@@ -221,21 +221,21 @@ public class AccountCreationService extends IntentService {
 				HostAuth.setHostAuthFromString(sendAuth, provider.outgoingUri);
 				sendAuth.setLogin(provider.outgoingUsername, password);
 			} else {
-				sendResult(email, RESULT_CODE_FAILURE, RESULT_INVALID_HOST);
+				sendResult(options, RESULT_CODE_FAILURE, 0, RESULT_INVALID_HOST);
 				return;
 			}
 		} catch (URISyntaxException e) {
-			sendResult(email, RESULT_CODE_FAILURE, RESULT_INVALID_HOST);
+			sendResult(options, RESULT_CODE_FAILURE, 0, RESULT_INVALID_HOST);
 			return;
 		}
 
 		if (account.save(this) != null) {
 			if (addSystemAccount(email, password, options)) {
-				sendResult(email, RESULT_CODE_SUCCESS, "OK");
+				sendResult(options, RESULT_CODE_SUCCESS, 0, "OK");
 				return;
 			}
 		}
-		sendResult(email, RESULT_CODE_FAILURE, RESULT_UNKNOWN);
+		sendResult(options, RESULT_CODE_FAILURE, 0, RESULT_UNKNOWN);
 	}
 
 	/**
@@ -393,12 +393,16 @@ public class AccountCreationService extends IntentService {
 	 * @param resultMessage
 	 *            detailed message for the results (OK, if success)
 	 */
-	private void sendResult(String email, int resultCode, String resultMessage) {
+	private void sendResult(Bundle options, int resultCode, int oemResultCode, String resultMessage) {
 		Intent result = new Intent(
 				"com.android.email.Accounts.CREATE_ACCOUNT_RESULT");
-		result.putExtra("message", resultMessage);
-		result.putExtra("email", email);
-		result.putExtra("resultCode", resultCode);
+		result.putExtra("success", resultCode == RESULT_CODE_SUCCESS ? true : false);
+		result.putExtra("version", options.getString(OPTIONS_VERSION));
+		result.putExtra("email", options.getString(OPTIONS_EMAIL));
+		result.putExtra("errorCode", oemResultCode);//TODO: OEM specific code
+		result.putExtra("errorMessage", resultMessage);
+		result.putExtra("intent", "");//TODO: What is this?
+		
 		sendBroadcast(result);// TODO: add permission
 	}
 
