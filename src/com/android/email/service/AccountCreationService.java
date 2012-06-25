@@ -20,13 +20,14 @@ import android.os.Bundle;
 
 /**
  * Service for creating email accounts. Example usage
- <pre>
- 		Intent createAccount = new Intent("com.android.email.CREATE_ACCOUNT_SERVICE");
-		createAccount.putExtra(OPTIONS_VERSION, "1.0");
-		createAccount.putExtra(OPTIONS_EMAIL,"test@example.com");
-		createAccount.putExtra(OPTIONS_PASSWORD, "password");
-		startService(createAccount);
- </pre>
+ * 
+ * <pre>
+ * Intent createAccount = new Intent(&quot;com.android.email.CREATE_ACCOUNT_SERVICE&quot;);
+ * createAccount.putExtra(OPTIONS_VERSION, &quot;1.0&quot;);
+ * createAccount.putExtra(OPTIONS_EMAIL, &quot;test@example.com&quot;);
+ * createAccount.putExtra(OPTIONS_PASSWORD, &quot;password&quot;);
+ * startService(createAccount);
+ * </pre>
  */
 public class AccountCreationService extends IntentService {
 
@@ -123,10 +124,15 @@ public class AccountCreationService extends IntentService {
 	public static final String OPTIONS_DOMAIN = "domain";
 
 	/**
-	 * Account creation results
+	 * The protocol version of this service is incorrect
 	 */
 	public static final String RESULT_INVALID_VERSION = "RESULT_INVALID_VERSION";
 
+	/**
+	 * Missing a parameter required to configure an email account
+	 */
+	public static final String RESULT_MISSING_REQUIRED_PARAMETER = "RESULT_MISSING_REQUIRED_PARAMETER";
+	
 	/**
 	 * The email account is either not specified or is malformed
 	 */
@@ -181,17 +187,10 @@ public class AccountCreationService extends IntentService {
 		String email = options.getString(OPTIONS_EMAIL);
 		String password = options.getString(OPTIONS_PASSWORD);
 
-		if (!isVersionProtocolSupported(options)) {
-			sendResult(options, RESULT_CODE_FAILURE, 0, RESULT_INVALID_VERSION);
+		if(!validateIncomingParameters(options)) {
 			return;
 		}
 
-		if (!mEmailValidator.isValid(email)) {
-			sendResult(options, 0, RESULT_CODE_FAILURE,
-					RESULT_EMAIL_ADDRESS_MALFORMED);
-			return;
-		}
-		
 		Account account = createDefaultAccountFrom(options);
 
 		String[] emailParts = email.split("@");
@@ -286,10 +285,13 @@ public class AccountCreationService extends IntentService {
 	}
 
 	/**
-	 * Sets the host authentication info for the inbound server on the specified account
+	 * Sets the host authentication info for the inbound server on the specified
+	 * account
 	 * 
-	 * @param account email account
-	 * @param options email account options
+	 * @param account
+	 *            email account
+	 * @param options
+	 *            email account options
 	 */
 	private void setHostAuthRecvFromBundle(Account account, Bundle options) {
 		HostAuth receiveHostAuth = account
@@ -302,10 +304,13 @@ public class AccountCreationService extends IntentService {
 	}
 
 	/**
-	 * Sets the host authentication info for the outbound server on the specified account
+	 * Sets the host authentication info for the outbound server on the
+	 * specified account
 	 * 
-	 * @param account email account
-	 * @param options email account options
+	 * @param account
+	 *            email account
+	 * @param options
+	 *            email account options
 	 */
 	private void setHostAuthSendFromBundle(Account account, Bundle options) {
 		HostAuth hostAuth = account.getOrCreateHostAuthSend(getBaseContext());
@@ -386,23 +391,27 @@ public class AccountCreationService extends IntentService {
 	/**
 	 * Sends results back to the invoking process
 	 * 
-	 * @param email
-	 *            email account
+	 * @param options
+	 *            email account options
 	 * @param resultCode
 	 *            code specifying success or failure of the response
+	 * @param oemResultCode
+	 *            oem specific error code
 	 * @param resultMessage
 	 *            detailed message for the results (OK, if success)
 	 */
-	private void sendResult(Bundle options, int resultCode, int oemResultCode, String resultMessage) {
+	private void sendResult(Bundle options, int resultCode, int oemResultCode,
+			String resultMessage) {
 		Intent result = new Intent(
 				"com.android.email.Accounts.CREATE_ACCOUNT_RESULT");
-		result.putExtra("success", resultCode == RESULT_CODE_SUCCESS ? true : false);
+		result.putExtra("success", resultCode == RESULT_CODE_SUCCESS ? true
+				: false);
 		result.putExtra("version", options.getString(OPTIONS_VERSION));
 		result.putExtra("email", options.getString(OPTIONS_EMAIL));
-		result.putExtra("errorCode", oemResultCode);//TODO: OEM specific code
+		result.putExtra("errorCode", oemResultCode);// TODO: OEM specific code
 		result.putExtra("errorMessage", resultMessage);
-		result.putExtra("intent", "");//TODO: What is this?
-		
+		result.putExtra("intent", "");// TODO: What is this?
+
 		sendBroadcast(result);// TODO: add permission
 	}
 
@@ -448,5 +457,43 @@ public class AccountCreationService extends IntentService {
 	private static boolean isVersionProtocolSupported(Bundle options) {
 		String version = options.getString(OPTIONS_VERSION, "0");
 		return "1.0".equals(version);
+	}
+	
+	/**
+	 * Returns true if have necessary parameters to create email account, otherwise false 
+	 * 
+	 * @param options email account creation options
+	 * @return true if have necessary parameters to create email account, otherwise false
+	 */
+	private static boolean hasRequiredOptions(Bundle options) {
+		return options.containsKey(OPTIONS_EMAIL)
+				&& options.containsKey(OPTIONS_PASSWORD);
+	}
+	
+	/**
+	 * Returns true if have valid parameters to create email account, otherwise false.
+	 * 
+	 * @param options email account options
+	 * @return true if have valid parameters to create email account, otherwise false
+	 */
+	private boolean validateIncomingParameters (Bundle options) {
+		if (!isVersionProtocolSupported(options)) {
+			sendResult(options, RESULT_CODE_FAILURE, 0, RESULT_INVALID_VERSION);
+			return false;
+		}
+
+		if(!hasRequiredOptions(options)) {
+			sendResult(options, 0, RESULT_CODE_FAILURE,
+					RESULT_MISSING_REQUIRED_PARAMETER);
+			return false;			
+		}
+		
+		if (!mEmailValidator.isValid(options.getString(OPTIONS_EMAIL))) {
+			sendResult(options, 0, RESULT_CODE_FAILURE,
+					RESULT_EMAIL_ADDRESS_MALFORMED);
+			return false;
+		}
+		
+		return true;
 	}
 }
