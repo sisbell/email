@@ -43,7 +43,7 @@ public class AccountCreationService extends IntentService {
 	public static final String OPTIONS_CALENDAR_SYNC_ENABLED = "syncCalendar";
 	public static final String OPTIONS_CONTACTS_SYNC_ENABLED = "syncContacts";
 	public static final String OPTIONS_SERVICE_TYPE = "serviceType";
-																	
+
 	public static final String OPTIONS_DOMAIN = "domain";// TODO: not used (eas)
 
 	/*
@@ -65,45 +65,6 @@ public class AccountCreationService extends IntentService {
 			| HostAuth.FLAG_AUTHENTICATE | HostAuth.FLAG_TRUST_ALL;
 
 	private final EmailAddressValidator mEmailValidator = new EmailAddressValidator();
-
-	private void setHostAuthRecvFromBundle(Account account, Bundle options) {
-		HostAuth receiveHostAuth = account
-				.getOrCreateHostAuthRecv(getBaseContext());
-		receiveHostAuth.setLogin(getLogin(options, OPTIONS_IN_LOGIN),
-				options.getString(OPTIONS_PASSWORD));
-		receiveHostAuth.setConnection(options.getString(OPTIONS_SERVICE_TYPE),
-				options.getString(OPTIONS_IN_SERVER),
-				options.getInt(OPTIONS_IN_PORT), HOST_AUTH_FLAGS);
-	}
-
-	private void setHostAuthSendFromBundle(Account account, Bundle options) {
-		HostAuth hostAuth = account.getOrCreateHostAuthSend(getBaseContext());
-		hostAuth.setLogin(getLogin(options, OPTIONS_OUT_LOGIN),
-				options.getString(OPTIONS_PASSWORD));
-		hostAuth.setConnection("smtp", options.getString(OPTIONS_OUT_SERVER),
-				options.getInt(OPTIONS_OUT_PORT), HOST_AUTH_FLAGS);
-	}
-	
-	private static String getLogin(Bundle options, String optionType) {
-		String login = options.getString(optionType);
-		return (login == null) ? options.getString(OPTIONS_EMAIL) : login;
-	}
-
-	private void setAccountFlags(Account account) {
-		account.setFlags(Account.FLAGS_INCOMPLETE
-				| Account.DELETE_POLICY_ON_DELETE << Account.FLAGS_DELETE_POLICY_SHIFT
-				| Account.FLAGS_NOTIFY_NEW_MAIL);
-	}
-
-	private Account fromBundleToAccount(Bundle options) {
-		Account account = new Account();
-		account.mDisplayName = options.getString(OPTIONS_DISPLAY_NAME);
-		account.mEmailAddress = options.getString(OPTIONS_EMAIL);
-
-		setAccountFlags(account);
-
-		return account;
-	}
 
 	public AccountCreationService() {
 		super("AccountCreationService");
@@ -193,7 +154,6 @@ public class AccountCreationService extends IntentService {
 				PopImapAuthenticatorService.OPTIONS_CALENDAR_SYNC_ENABLED,
 				options.getBoolean(OPTIONS_CALENDAR_SYNC_ENABLED));
 
-
 		AccountManager accountManager = AccountManager.get(this);
 		AccountManagerFuture<Bundle> future = accountManager.addAccount(
 				"com.android.email", null, null, userdata, null, null, null);
@@ -212,6 +172,50 @@ public class AccountCreationService extends IntentService {
 		return isAccountCreated(resultBundle);
 	}
 
+	private void setHostAuthRecvFromBundle(Account account, Bundle options) {
+		HostAuth receiveHostAuth = account
+				.getOrCreateHostAuthRecv(getBaseContext());
+		receiveHostAuth.setLogin(getLogin(options, OPTIONS_IN_LOGIN),
+				options.getString(OPTIONS_PASSWORD));
+		receiveHostAuth.setConnection(options.getString(OPTIONS_SERVICE_TYPE),
+				options.getString(OPTIONS_IN_SERVER),
+				options.getInt(OPTIONS_IN_PORT), HOST_AUTH_FLAGS);
+	}
+
+	private void setHostAuthSendFromBundle(Account account, Bundle options) {
+		HostAuth hostAuth = account.getOrCreateHostAuthSend(getBaseContext());
+		hostAuth.setLogin(getLogin(options, OPTIONS_OUT_LOGIN),
+				options.getString(OPTIONS_PASSWORD));
+		hostAuth.setConnection("smtp", options.getString(OPTIONS_OUT_SERVER),
+				options.getInt(OPTIONS_OUT_PORT), HOST_AUTH_FLAGS);
+	}
+
+	private static String getLogin(Bundle options, String optionType) {
+		String login = options.getString(optionType);
+		return (login == null) ? options.getString(OPTIONS_EMAIL) : login;
+	}
+
+	private static String getDisplayName(Bundle options) {
+		String name = options.getString(OPTIONS_DISPLAY_NAME);
+		return (name == null) ? options.getString(OPTIONS_EMAIL) : name;
+	}
+
+	private void setAccountFlags(Account account) {
+		account.setFlags(Account.FLAGS_INCOMPLETE
+				| Account.DELETE_POLICY_ON_DELETE << Account.FLAGS_DELETE_POLICY_SHIFT
+				| Account.FLAGS_NOTIFY_NEW_MAIL);
+	}
+
+	private Account fromBundleToAccount(Bundle options) {
+		Account account = new Account();
+		account.mDisplayName = getDisplayName(options);
+		account.mEmailAddress = options.getString(OPTIONS_EMAIL);
+
+		setAccountFlags(account);
+
+		return account;
+	}
+
 	private boolean isAccountCreated(Bundle resultBundle) {
 		return resultBundle != null
 				&& resultBundle.containsKey(AccountManager.KEY_ACCOUNT_NAME)
@@ -219,11 +223,12 @@ public class AccountCreationService extends IntentService {
 	}
 
 	private void sendResult(String email, int resultCode, String resultMessage) {
-		Intent result = new Intent("com.android.email.Accounts.CREATE_ACCOUNT_RESULT");
+		Intent result = new Intent(
+				"com.android.email.Accounts.CREATE_ACCOUNT_RESULT");
 		result.putExtra("message", resultMessage);
-		result.putExtra("email", email);	
+		result.putExtra("email", email);
 		result.putExtra("resultCode", resultCode);
-		sendBroadcast(result);//TODO: add permission
+		sendBroadcast(result);// TODO: add permission
 	}
 
 	private static boolean hasReceiveAuthOptions(Bundle options) {
