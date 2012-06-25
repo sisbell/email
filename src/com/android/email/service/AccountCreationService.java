@@ -15,11 +15,8 @@ import android.accounts.AccountManagerFuture;
 import android.accounts.AuthenticatorException;
 import android.accounts.OperationCanceledException;
 import android.app.IntentService;
-import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager.NameNotFoundException;
 import android.os.Bundle;
-import android.os.ResultReceiver;
 
 public class AccountCreationService extends IntentService {
 
@@ -30,13 +27,13 @@ public class AccountCreationService extends IntentService {
 	public static final String OPTIONS_PASSWORD = "password";
 	public static final String OPTIONS_EMAIL = "email";
 
-	public static final String OPTIONS_IN_LOGIN = "inLogin";// TODO: not used
+	public static final String OPTIONS_IN_LOGIN = "inLogin";
 	public static final String OPTIONS_IN_SERVER = "inServer";
 	public static final String OPTIONS_IN_PORT = "inPort";
 	public static final String OPTIONS_IN_SECURITY = "inSecurity";// TODO: not
 																	// used
 
-	public static final String OPTIONS_OUT_LOGIN = "outLogin";// TODO: not used
+	public static final String OPTIONS_OUT_LOGIN = "outLogin";
 	public static final String OPTIONS_OUT_SERVER = "outServer";
 	public static final String OPTIONS_OUT_PORT = "outPort";
 	public static final String OPTIONS_OUT_SECURITY = "outSecurity";// TODO: not
@@ -45,9 +42,9 @@ public class AccountCreationService extends IntentService {
 	public static final String OPTIONS_EMAIL_SYNC_ENABLED = "syncEmail";
 	public static final String OPTIONS_CALENDAR_SYNC_ENABLED = "syncCalendar";
 	public static final String OPTIONS_CONTACTS_SYNC_ENABLED = "syncContacts";
-	public static final String OPTIONS_SERVICE_TYPE = "serviceType";// TODO: not
-																	// used
-	public static final String OPTIONS_DOMAIN = "domain";// TODO: not used
+	public static final String OPTIONS_SERVICE_TYPE = "serviceType";
+																	
+	public static final String OPTIONS_DOMAIN = "domain";// TODO: not used (eas)
 
 	/*
 	 * Account creation results
@@ -72,19 +69,24 @@ public class AccountCreationService extends IntentService {
 	private void setHostAuthRecvFromBundle(Account account, Bundle options) {
 		HostAuth receiveHostAuth = account
 				.getOrCreateHostAuthRecv(getBaseContext());
-		receiveHostAuth.setLogin(options.getString(OPTIONS_EMAIL),
+		receiveHostAuth.setLogin(getLogin(options, OPTIONS_IN_LOGIN),
 				options.getString(OPTIONS_PASSWORD));
-		receiveHostAuth.setConnection("imap",
+		receiveHostAuth.setConnection(options.getString(OPTIONS_SERVICE_TYPE),
 				options.getString(OPTIONS_IN_SERVER),
 				options.getInt(OPTIONS_IN_PORT), HOST_AUTH_FLAGS);
 	}
 
 	private void setHostAuthSendFromBundle(Account account, Bundle options) {
 		HostAuth hostAuth = account.getOrCreateHostAuthSend(getBaseContext());
-		hostAuth.setLogin(options.getString(OPTIONS_EMAIL),
+		hostAuth.setLogin(getLogin(options, OPTIONS_OUT_LOGIN),
 				options.getString(OPTIONS_PASSWORD));
 		hostAuth.setConnection("smtp", options.getString(OPTIONS_OUT_SERVER),
 				options.getInt(OPTIONS_OUT_PORT), HOST_AUTH_FLAGS);
+	}
+	
+	private static String getLogin(Bundle options, String optionType) {
+		String login = options.getString(optionType);
+		return (login == null) ? options.getString(OPTIONS_EMAIL) : login;
 	}
 
 	private void setAccountFlags(Account account) {
