@@ -9,6 +9,7 @@ import com.android.email.activity.setup.AccountSettingsUtils;
 import com.android.email.activity.setup.AccountSettingsUtils.Provider;
 import com.android.emailcommon.provider.Account;
 import com.android.emailcommon.provider.HostAuth;
+import com.android.emailcommon.utility.Utility;
 
 import android.accounts.AccountManager;
 import android.accounts.AccountManagerFuture;
@@ -132,7 +133,7 @@ public class AccountCreationService extends IntentService {
 	 * Missing a parameter required to configure an email account
 	 */
 	public static final String RESULT_MISSING_REQUIRED_PARAMETER = "RESULT_MISSING_REQUIRED_PARAMETER";
-	
+
 	/**
 	 * The email account is either not specified or is malformed
 	 */
@@ -142,6 +143,11 @@ public class AccountCreationService extends IntentService {
 	 * The email host URI is either not specified or is invalid
 	 */
 	public static final String RESULT_INVALID_HOST = "RESULT_INVALID_HOST";
+
+	/**
+	 * Duplicate email account
+	 */
+	public static final String RESULT_DUPLICATE_ACCOUNT = "RESULT_DUPLICATE_ACCOUNT";
 
 	/**
 	 * Unknown email failure
@@ -187,7 +193,16 @@ public class AccountCreationService extends IntentService {
 		String email = options.getString(OPTIONS_EMAIL);
 		String password = options.getString(OPTIONS_PASSWORD);
 
-		if(!validateIncomingParameters(options)) {
+		if (!validateIncomingParameters(options)) {
+			return;
+		}
+
+		if (Utility.findExistingAccount(this, -1,
+				options.getString(OPTIONS_IN_SERVER),
+				getLogin(options, OPTIONS_IN_LOGIN)) != null) {
+			
+			sendResult(options, RESULT_CODE_FAILURE, 0,
+					RESULT_DUPLICATE_ACCOUNT);
 			return;
 		}
 
@@ -458,42 +473,48 @@ public class AccountCreationService extends IntentService {
 		String version = options.getString(OPTIONS_VERSION, "0");
 		return "1.0".equals(version);
 	}
-	
+
 	/**
-	 * Returns true if have necessary parameters to create email account, otherwise false 
+	 * Returns true if have necessary parameters to create email account,
+	 * otherwise false
 	 * 
-	 * @param options email account creation options
-	 * @return true if have necessary parameters to create email account, otherwise false
+	 * @param options
+	 *            email account creation options
+	 * @return true if have necessary parameters to create email account,
+	 *         otherwise false
 	 */
 	private static boolean hasRequiredOptions(Bundle options) {
 		return options.containsKey(OPTIONS_EMAIL)
 				&& options.containsKey(OPTIONS_PASSWORD);
 	}
-	
+
 	/**
-	 * Returns true if have valid parameters to create email account, otherwise false.
+	 * Returns true if have valid parameters to create email account, otherwise
+	 * false.
 	 * 
-	 * @param options email account options
-	 * @return true if have valid parameters to create email account, otherwise false
+	 * @param options
+	 *            email account options
+	 * @return true if have valid parameters to create email account, otherwise
+	 *         false
 	 */
-	private boolean validateIncomingParameters (Bundle options) {
+	private boolean validateIncomingParameters(Bundle options) {
 		if (!isVersionProtocolSupported(options)) {
 			sendResult(options, RESULT_CODE_FAILURE, 0, RESULT_INVALID_VERSION);
 			return false;
 		}
 
-		if(!hasRequiredOptions(options)) {
+		if (!hasRequiredOptions(options)) {
 			sendResult(options, 0, RESULT_CODE_FAILURE,
 					RESULT_MISSING_REQUIRED_PARAMETER);
-			return false;			
+			return false;
 		}
-		
+
 		if (!mEmailValidator.isValid(options.getString(OPTIONS_EMAIL))) {
 			sendResult(options, 0, RESULT_CODE_FAILURE,
 					RESULT_EMAIL_ADDRESS_MALFORMED);
 			return false;
 		}
-		
+
 		return true;
 	}
 }
