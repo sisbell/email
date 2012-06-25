@@ -344,10 +344,7 @@
             android:name=".service.AccountCreationService"
 			android:permission="com.android.email.permission.USE_ACCOUNT_CREATION_SERVICE"
             >
-            <intent-filter>
-                <action
-                    android:name="com.android.email.CREATE_ACCOUNT_SERVICE" />
-            </intent-filter>			
+            			
         </service>
 
         <service
@@ -511,6 +508,12 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_info" />
+        </receiver>
+        
+        <receiver android:name=".EmailSetupBroadcastReceiver" >
+            <intent-filter >
+                <action android:name="com.android.email.Accounts.CREATE_ACCOUNT" />
+            </intent-filter>
         </receiver>
     </application>
 </manifest>

@@ -196,15 +196,16 @@ public class AccountCreationService extends IntentService {
 		if (!validateIncomingParameters(options)) {
 			return;
 		}
-
-		if (Utility.findExistingAccount(this, -1,
-				options.getString(OPTIONS_IN_SERVER),
-				getLogin(options, OPTIONS_IN_LOGIN)) != null) {
-			
-			sendResult(options, RESULT_CODE_FAILURE, 0,
-					RESULT_DUPLICATE_ACCOUNT);
-			return;
-		}
+//TODO: fix errors here (e.g. when no accounts exist)
+		
+//		if (Utility.findExistingAccount(this, -1,
+//				options.getString(OPTIONS_IN_SERVER),
+//				getLogin(options, OPTIONS_IN_LOGIN)) != null) {
+//			
+//			sendResult(options, RESULT_CODE_FAILURE, 0,
+//					RESULT_DUPLICATE_ACCOUNT);
+//			return;
+//		}
 
 		Account account = createDefaultAccountFrom(options);
 
